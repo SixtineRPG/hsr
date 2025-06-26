@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Mon Kanban Privé</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="kanban">
+      <div class="column" data-status="todo">
+        <h2>À faire</h2>
+        <div class="cards"></div>
+      </div>
+      <div class="column" data-status="doing">
+        <h2>En cours</h2>
+        <div class="cards"></div>
+      </div>
+      <div class="column" data-status="done">
+        <h2>Fait</h2>
+        <div class="cards"></div>
+      </div>
+    </div>
+    <button id="addCard">+ Ajouter une carte</button>
+    <script src="script.js"></script>
+  </body>
+</html>
