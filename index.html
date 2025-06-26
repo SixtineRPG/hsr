@@ -1,19 +1,38 @@
-<!DOCTYPE html>
-<html lang="fr">
-  <head>
-    <meta charset="UTF-8" />
-    <title>Connexion sécurisée</title>
-    <link rel="stylesheet" href="style.css" />
-  </head>
-  <body>
-    <h1>Connexion Kanban</h1>
-    <form id="login-form">
-      <label> Mot de passe : <input type="password" id="password" required /> </label><br /><br />
-      <label> Token GitHub : <input type="password" id="token" required /> </label><br /><br />
-      <button type="submit">Se connecter</button>
-    </form>
+(async () => {
+  const form = document.getElementById("login-form");
 
-    <script src="crypto.js"></script>
-    <script src="auth.js"></script>
-  </body>
-</html>
+  // Si token chiffré existe déjà, cacher le champ token
+  if (localStorage.getItem("kanban_token")) {
+    document.getElementById("token").closest("label").style.display = "none";
+  }
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const pw = form.password.value;
+    const tokenField = form.token;
+    const tokenStored = localStorage.getItem("kanban_token");
+
+    // Hash mot de passe et vérification (comme avant)
+    const pwHash = await sha256(pw);
+    if (pwHash !== CORRECT_HASH) {
+      alert("Mot de passe incorrect");
+      return;
+    }
+
+    // Si pas de token stocké, on chiffre et stocke le token
+    if (!tokenStored) {
+      const token = tokenField.value;
+      if (!token) {
+        alert("Token requis à la première connexion");
+        return;
+      }
+      const encryptedToken = await encrypt(token, pw);
+      localStorage.setItem("kanban_token", encryptedToken);
+    }
+
+    localStorage.setItem("kanban_authenticated", "true");
+    sessionStorage.setItem("kanban_pw", pw);
+
+    window.location.href = "kanban.html";
+  });
+})();
