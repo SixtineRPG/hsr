@@ -46,11 +46,6 @@
     const addCardBtn = document.getElementById('addCardBtn');
     const newCardText = document.getElementById('newCardText');
 
-    // Générer un ID unique simple
-    function generateId() {
-      return Date.now().toString(36) + Math.random().toString(36).slice(2,7);
-    }
-
     function renderBoard(board) {
       if (!board || !board.columns) {
         columnsContainer.innerHTML = '<p>Pas de données disponibles.</p>';
@@ -82,10 +77,8 @@
             li.addEventListener('blur', () => {
               const newText = li.textContent.trim();
               if(newText === '') {
-                // Supprimer la carte si texte vide
                 db.ref(`board/columns/${colKey}/cards/${cardId}`).remove();
               } else {
-                // Mettre à jour le texte
                 db.ref(`board/columns/${colKey}/cards/${cardId}/text`).set(newText);
               }
             });
@@ -100,25 +93,40 @@
     }
 
     // Écoute les données en temps réel
-db.ref('board').on('value', snapshot => {
-  const board = snapshot.val();
-  if (board) {
-    renderBoard(board);
-  } else {
-    columnsContainer.innerHTML = '<p>Pas de données disponibles.</p>';
-  }
-});
+    db.ref('board').on('value', snapshot => {
+      const board = snapshot.val();
+      if (board) {
+        renderBoard(board);
+      } else {
+        columnsContainer.innerHTML = '<p>Pas de données disponibles.</p>';
+      }
+    });
 
-    // Ajouter une carte dans "À faire"
-    addCardBtn.addEventListener('click', () => {
+    // Ajouter une carte avec ID numérique
+    addCardBtn.onclick = () => {
       const text = newCardText.value.trim();
       if (text === '') return alert("Le texte ne peut pas être vide");
 
-      const newId = generateId();
-      db.ref(`board/columns/todo/cards/${newId}`).set({ text });
+      const boardRef = db.ref('board');
 
-      newCardText.value = '';
-    });
+      boardRef.once('value').then(snapshot => {
+        const board = snapshot.val();
+        const nextId = board.nextCardId || 1;
+
+        // S'assurer que la structure existe
+        if (!board.columns || !board.columns.todo || !board.columns.todo.cards) {
+          alert("Colonne 'todo' introuvable.");
+          return;
+        }
+
+        // Ajoute la carte
+        board.columns.todo.cards[nextId] = { text };
+        board.nextCardId = nextId + 1;
+
+        boardRef.set(board);
+        newCardText.value = '';
+      });
+    };
   </script>
 
 </body>
