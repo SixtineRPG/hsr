@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Kanban privé sécurisé</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <button id="logout">Se déconnecter</button>
+    <div class="kanban">
+      <div class="column" data-status="todo">
+        <h2>À faire</h2>
+        <div class="cards"></div>
+      </div>
+      <div class="column" data-status="doing">
+        <h2>En cours</h2>
+        <div class="cards"></div>
+      </div>
+      <div class="column" data-status="done">
+        <h2>Fait</h2>
+        <div class="cards"></div>
+      </div>
+    </div>
+    <button id="addCard">+ Ajouter une carte</button>
+
+    <script src="crypto.js"></script>
+    <script>
+      async function init() {
+        const pw = sessionStorage.getItem("kanban_pw");
+        if (!pw) {
+          window.location.href = "index.html";
+          return;
+        }
+
+        const encryptedToken = localStorage.getItem("kanban_token");
+        if (!encryptedToken) {
+          alert("Token manquant, reconnectez-vous.");
+          window.location.href = "index.html";
+          return;
+        }
+
+        try {
+          window.KANBAN_TOKEN = await decrypt(encryptedToken, pw);
+        } catch {
+          alert("Mot de passe incorrect pour déchiffrement.");
+          window.location.href = "index.html";
+          return;
+        }
+
+        document.getElementById("logout").addEventListener("click", () => {
+          localStorage.clear();
+          sessionStorage.clear();
+          window.location.href = "index.html";
+        });
+
+        // Charger script.js et lancer le kanban
+        const script = document.createElement("script");
+        script.src = "script.js";
+        document.body.appendChild(script);
+      }
+
+      init();
+    </script>
+  </body>
+</html>

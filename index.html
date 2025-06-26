@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Connexion sécurisée</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <h1>Connexion Kanban</h1>
+    <form id="login-form">
+      <label> Mot de passe : <input type="password" id="password" required /> </label><br /><br />
+      <label> Token GitHub : <input type="password" id="token" required /> </label><br /><br />
+      <button type="submit">Se connecter</button>
+    </form>
+
+    <script src="crypto.js"></script>
+    <script src="auth.js"></script>
+  </body>
+</html>
