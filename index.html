@@ -2,38 +2,30 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
-  <title>Kanban avec Realtime Database</title>
+  <title>Kanban Firebase Realtime DB</title>
   <style>
     body { font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 1em;}
     .column { margin-bottom: 2em; }
     .cards { list-style: none; padding-left: 0; }
-    .cards li { padding: 0.5em; border: 1px solid #ccc; margin-bottom: 0.5em; display: flex; justify-content: space-between; }
-    .cards li[contenteditable="true"]:focus { outline: 2px solid #007bff; }
-    button { cursor: pointer; }
+    .cards li { padding: 0.5em; border: 1px solid #ccc; margin-bottom: 0.5em; }
   </style>
 </head>
 <body>
 
-  <h1>Kanban Realtime Database</h1>
+  <h1>Kanban Firebase Realtime DB</h1>
 
   <div id="columnsContainer"></div>
 
-  <h3>Ajouter une carte dans "À faire"</h3>
-  <input type="text" id="newCardText" placeholder="Texte de la tâche" />
-  <button id="addCardBtn">Ajouter</button>
-
-  <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
 
   <script>
-    // Ta config Firebase ici (copie la tienne)
     const firebaseConfig = {
       apiKey: "AIzaSyDjMvnPebLgJGUlgJm6_jU19FOfRYYwoK8",
       authDomain: "hsr-tracker-26c18.firebaseapp.com",
       databaseURL: "https://hsr-tracker-26c18-default-rtdb.europe-west1.firebasedatabase.app",
       projectId: "hsr-tracker-26c18",
-      storageBucket: "hsr-tracker-26c18.appspot.com",
+      storageBucket: "hsr-tracker-26c18.firebasedatabase.app",
       messagingSenderId: "202249444604",
       appId: "1:202249444604:web:4cb7cb6ccb218f27c74b79"
     };
@@ -42,54 +34,33 @@
     const db = firebase.database();
 
     const columnsContainer = document.getElementById('columnsContainer');
-    const addCardBtn = document.getElementById('addCardBtn');
-    const newCardText = document.getElementById('newCardText');
 
-    let board = null;
+    function renderBoard(board) {
+      if (!board || !board.columns) {
+        console.warn('board ou board.columns non défini');
+        columnsContainer.innerHTML = '<p>Pas de données disponibles.</p>';
+        return;
+      }
 
-    function generateId() {
-      return Date.now().toString(36) + Math.random().toString(36).substr(2,5);
-    }
-
-    function renderBoard(boardData) {
       columnsContainer.innerHTML = '';
-      for (const [colKey, colData] of Object.entries(boardData.columns)) {
+
+      for (const [colKey, colData] of Object.entries(board.columns)) {
         const colDiv = document.createElement('div');
         colDiv.className = 'column';
 
         const title = document.createElement('h2');
-        title.textContent = colData.title;
+        title.textContent = colData.title || colKey;
         colDiv.appendChild(title);
 
         const ulCards = document.createElement('ul');
         ulCards.className = 'cards';
 
-        for (const [cardId, card] of Object.entries(colData.cards)) {
-          const li = document.createElement('li');
-          li.textContent = card.text;
-          li.contentEditable = true;
-
-          li.addEventListener('blur', () => {
-            const newText = li.textContent.trim();
-            if (newText === '') {
-              // Supprimer la carte
-              delete board.columns[colKey].cards[cardId];
-            } else {
-              board.columns[colKey].cards[cardId].text = newText;
-            }
-            saveBoard();
-          });
-
-          const delBtn = document.createElement('button');
-          delBtn.textContent = 'X';
-          delBtn.style.marginLeft = '10px';
-          delBtn.onclick = () => {
-            delete board.columns[colKey].cards[cardId];
-            saveBoard();
-          };
-
-          li.appendChild(delBtn);
-          ulCards.appendChild(li);
+        if (colData.cards) {
+          for (const [cardId, card] of Object.entries(colData.cards)) {
+            const li = document.createElement('li');
+            li.textContent = card.text || "(vide)";
+            ulCards.appendChild(li);
+          }
         }
 
         colDiv.appendChild(ulCards);
@@ -97,37 +68,27 @@
       }
     }
 
-    function saveBoard() {
-      if (!board) return;
-      db.ref('board').set(board).catch(e => console.error("Erreur sauvegarde :", e));
-    }
+    // Ecoute les données en temps réel
+    db.ref('board').on('value', snapshot => {
+      let board = snapshot.val();
 
-    // Ecoute les changements dans Realtime Database sur 'board'
-    db.ref('board').on('value', (snapshot) => {
-      if(snapshot.exists()) {
-        board = snapshot.val();
-        renderBoard(board);
-      } else {
-        // Initialiser si pas de board
+      if (!board || !board.columns) {
         board = {
           columns: {
-            todo: { title: "À faire", cards: {} },
+            todo: { title: "À faire", cards: {
+              "1": { text: "Créer le projet Firebase" },
+              "2": { text: "Faire la maquette du board" }
+            }},
             inprogress: { title: "En cours", cards: {} },
             done: { title: "Fait", cards: {} }
           }
         };
-        saveBoard();
+        // Initialisation dans la BDD
+        db.ref('board').set(board);
       }
-    });
 
-    addCardBtn.onclick = () => {
-      const text = newCardText.value.trim();
-      if(text === '' || !board) return;
-      const newId = generateId();
-      board.columns.todo.cards[newId] = { text };
-      saveBoard();
-      newCardText.value = '';
-    };
+      renderBoard(board);
+    });
   </script>
 
 </body>
