@@ -7,12 +7,21 @@
     body { font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 1em;}
     .column { margin-bottom: 2em; }
     .cards { list-style: none; padding-left: 0; }
-    .cards li { padding: 0.5em; border: 1px solid #ccc; margin-bottom: 0.5em; }
+    .cards li { padding: 0.5em; border: 1px solid #ccc; margin-bottom: 0.5em; cursor: text; }
+    .cards li[contenteditable="true"]:focus { outline: 2px solid #007bff; }
+    #addCardSection { margin-bottom: 2em; }
+    #newCardText { width: 70%; padding: 0.4em; }
+    #addCardBtn { padding: 0.4em 0.8em; }
   </style>
 </head>
 <body>
 
   <h1>Kanban Firebase Realtime DB</h1>
+
+  <div id="addCardSection">
+    <input type="text" id="newCardText" placeholder="Texte nouvelle carte" />
+    <button id="addCardBtn">Ajouter une carte à « À faire »</button>
+  </div>
 
   <div id="columnsContainer"></div>
 
@@ -34,10 +43,16 @@
     const db = firebase.database();
 
     const columnsContainer = document.getElementById('columnsContainer');
+    const addCardBtn = document.getElementById('addCardBtn');
+    const newCardText = document.getElementById('newCardText');
+
+    // Générer un ID unique simple
+    function generateId() {
+      return Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+    }
 
     function renderBoard(board) {
       if (!board || !board.columns) {
-        console.warn('board ou board.columns non défini');
         columnsContainer.innerHTML = '<p>Pas de données disponibles.</p>';
         return;
       }
@@ -59,6 +74,22 @@
           for (const [cardId, card] of Object.entries(colData.cards)) {
             const li = document.createElement('li');
             li.textContent = card.text || "(vide)";
+            li.contentEditable = "true";
+            li.dataset.colKey = colKey;
+            li.dataset.cardId = cardId;
+
+            // Sauvegarde au blur (fin d'édition)
+            li.addEventListener('blur', () => {
+              const newText = li.textContent.trim();
+              if(newText === '') {
+                // Supprimer la carte si texte vide
+                db.ref(`board/columns/${colKey}/cards/${cardId}`).remove();
+              } else {
+                // Mettre à jour le texte
+                db.ref(`board/columns/${colKey}/cards/${cardId}/text`).set(newText);
+              }
+            });
+
             ulCards.appendChild(li);
           }
         }
@@ -68,26 +99,25 @@
       }
     }
 
-    // Ecoute les données en temps réel
-    db.ref('board').on('value', snapshot => {
-      let board = snapshot.val();
+    // Écoute les données en temps réel
+db.ref('board').on('value', snapshot => {
+  const board = snapshot.val();
+  if (board) {
+    renderBoard(board);
+  } else {
+    columnsContainer.innerHTML = '<p>Pas de données disponibles.</p>';
+  }
+});
 
-      if (!board || !board.columns) {
-        board = {
-          columns: {
-            todo: { title: "À faire", cards: {
-              "1": { text: "Créer le projet Firebase" },
-              "2": { text: "Faire la maquette du board" }
-            }},
-            inprogress: { title: "En cours", cards: {} },
-            done: { title: "Fait", cards: {} }
-          }
-        };
-        // Initialisation dans la BDD
-        db.ref('board').set(board);
-      }
+    // Ajouter une carte dans "À faire"
+    addCardBtn.addEventListener('click', () => {
+      const text = newCardText.value.trim();
+      if (text === '') return alert("Le texte ne peut pas être vide");
 
-      renderBoard(board);
+      const newId = generateId();
+      db.ref(`board/columns/todo/cards/${newId}`).set({ text });
+
+      newCardText.value = '';
     });
   </script>
 
