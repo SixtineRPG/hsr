@@ -15,153 +15,150 @@
 </head>
 <body>
 
-<h1>Kanban privé</h1>
+ <h1>Kanban Firebase JSON</h1>
 
-<div id="loginForm">
-  <h2>Connexion</h2>
-  <input id="email" type="email" placeholder="Email" /><br/><br/>
-  <input id="password" type="password" placeholder="Mot de passe" /><br/><br/>
-  <button id="loginBtn">Se connecter</button>
-  <p id="loginError" style="color:red;"></p>
-</div>
+  <div id="kanban" class="kanban"></div>
 
-<div id="kanban" style="display:none;">
-  <button id="logoutBtn">Déconnexion</button>
-  <h2>Mes tâches</h2>
-  <ul id="tasks"></ul>
-  <input id="addTaskInput" placeholder="Nouvelle tâche..." />
-  <button id="addTaskBtn">Ajouter</button>
-</div>
+  <button id="addCard">+ Ajouter une carte dans "À faire"</button>
 
-<!-- Firebase JS SDK -->
-<script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
 
-<script>
-  // TODO : remplace par ta config Firebase
-  const firebaseConfig = {
+  <script>
+    // Remplace par ta config Firebase
+    const firebaseConfig = {
   apiKey: "AIzaSyDjMvnPebLgJGUlgJm6_jU19FOfRYYwoK8",
   authDomain: "hsr-tracker-26c18.firebaseapp.com",
   databaseURL: "https://hsr-tracker-26c18-default-rtdb.europe-west1.firebasedatabase.app",
   projectId: "hsr-tracker-26c18",
   storageBucket: "hsr-tracker-26c18.firebasestorage.app",
   messagingSenderId: "202249444604",
-    measurementId: "TA_MEASUREMENTID"
-  };
+  appId: "1:202249444604:web:4cb7cb6ccb218f27c74b79"
+    };
 
-  // Init Firebase
-  firebase.initializeApp(firebaseConfig);
-  const auth = firebase.auth();
-  const db = firebase.firestore();
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
 
-  // Elements DOM
-  const loginForm = document.getElementById('loginForm');
-  const emailInput = document.getElementById('email');
-  const passwordInput = document.getElementById('password');
-  const loginBtn = document.getElementById('loginBtn');
-  const loginError = document.getElementById('loginError');
+    const kanbanDiv = document.getElementById('kanban');
+    const addCardBtn = document.getElementById('addCard');
 
-  const kanbanDiv = document.getElementById('kanban');
-  const logoutBtn = document.getElementById('logoutBtn');
-  const tasksUl = document.getElementById('tasks');
-  const addTaskInput = document.getElementById('addTaskInput');
-  const addTaskBtn = document.getElementById('addTaskBtn');
+    let board = null;
+    let userId = null;
+    let unsubscribe = null;
 
-  let unsubscribeKanban = null;
+    // Génère un ID simple unique (timestamp + random)
+    function generateId() {
+      return Date.now().toString(36) + Math.random().toString(36).substring(2,5);
+    }
 
-  // Fonction afficher les tâches dans la liste
-  function renderTasks(tasks) {
-    tasksUl.innerHTML = '';
-    tasks.forEach((task, index) => {
-      const li = document.createElement('li');
+    // Render le board complet dans #kanban
+    function renderBoard(board) {
+      kanbanDiv.innerHTML = '';
+      for (const [colKey, colData] of Object.entries(board.columns)) {
+        const colDiv = document.createElement('div');
+        colDiv.className = 'column';
+        colDiv.dataset.status = colKey;
 
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.value = task;
-      input.onchange = () => {
-        tasks[index] = input.value;
-        saveTasks(tasks);
-      };
+        const titleH2 = document.createElement('h2');
+        titleH2.textContent = colData.title;
+        colDiv.appendChild(titleH2);
 
-      const delBtn = document.createElement('button');
-      delBtn.textContent = '❌';
-      delBtn.onclick = () => {
-        tasks.splice(index, 1);
-        saveTasks(tasks);
-      };
+        const cardsDiv = document.createElement('div');
+        cardsDiv.className = 'cards';
 
-      li.appendChild(input);
-      li.appendChild(delBtn);
-      tasksUl.appendChild(li);
-    });
-  }
+        // Parcours les cartes
+        for (const [cardId, card] of Object.entries(colData.cards)) {
+          const cardDiv = document.createElement('div');
+          cardDiv.className = 'card';
+          cardDiv.contentEditable = 'true';
+          cardDiv.textContent = card.text;
+          cardDiv.dataset.cardId = cardId;
+          cardDiv.dataset.colKey = colKey;
 
-  // Sauvegarde dans Firestore
-  function saveTasks(tasks) {
-    const uid = auth.currentUser.uid;
-    db.collection('kanbans').doc(uid).set({ tasks });
-  }
+          // Sauvegarde le texte au blur
+          cardDiv.addEventListener('blur', () => {
+            const newText = cardDiv.textContent.trim();
+            if (newText === '') {
+              delete board.columns[colKey].cards[cardId];
+            } else {
+              board.columns[colKey].cards[cardId].text = newText;
+            }
+            saveBoard();
+          });
 
-  // Ecoute en temps réel des tâches Firestore
-  function listenKanban() {
-    const uid = auth.currentUser.uid;
-    unsubscribeKanban = db.collection('kanbans').doc(uid)
-      .onSnapshot(doc => {
+          // Bouton supprimer
+          const delBtn = document.createElement('button');
+          delBtn.textContent = 'X';
+          delBtn.style.marginLeft = '10px';
+          delBtn.onclick = () => {
+            delete board.columns[colKey].cards[cardId];
+            saveBoard();
+          };
+
+          cardDiv.appendChild(delBtn);
+          cardsDiv.appendChild(cardDiv);
+        }
+
+        colDiv.appendChild(cardsDiv);
+        kanbanDiv.appendChild(colDiv);
+      }
+    }
+
+    // Sauvegarder le board dans Firestore
+    function saveBoard() {
+      db.collection('kanbans').doc(userId).set({ board })
+        .catch(err => console.error("Erreur sauvegarde :", err));
+    }
+
+    // Ecoute Firestore en temps réel
+    function listenBoard(uid) {
+      unsubscribe = db.collection('kanbans').doc(uid).onSnapshot(doc => {
         if (doc.exists) {
-          const data = doc.data();
-          renderTasks(data.tasks || []);
+          board = doc.data().board;
+          renderBoard(board);
         } else {
-          renderTasks([]);
+          // Init vide si pas de board
+          board = {
+            columns: {
+              todo: { title: "À faire", cards: {} },
+              inprogress: { title: "En cours", cards: {} },
+              done: { title: "Fait", cards: {} }
+            }
+          };
+          saveBoard();
         }
       });
-  }
-
-  // Connexion
-  loginBtn.onclick = async () => {
-    loginError.textContent = '';
-    const email = emailInput.value.trim();
-    const password = passwordInput.value.trim();
-    try {
-      await auth.signInWithEmailAndPassword(email, password);
-    } catch (err) {
-      loginError.textContent = "Erreur login : " + err.message;
     }
-  };
 
-  // Déconnexion
-  logoutBtn.onclick = () => {
-    if(unsubscribeKanban) unsubscribeKanban();
-    auth.signOut();
-  };
+    // Ajoute une carte dans "todo"
+    addCardBtn.onclick = () => {
+      if (!board) return;
+      const id = generateId();
+      board.columns.todo.cards[id] = { text: "Nouvelle tâche" };
+      saveBoard();
+    };
 
-  // Ajout tâche
-  addTaskBtn.onclick = () => {
-    const newTask = addTaskInput.value.trim();
-    if (!newTask) return;
-    const uid = auth.currentUser.uid;
-    db.collection('kanbans').doc(uid).get().then(doc => {
-      let tasks = [];
-      if (doc.exists) tasks = doc.data().tasks || [];
-      tasks.push(newTask);
-      saveTasks(tasks);
-      addTaskInput.value = '';
+    // Auth simple (tu peux adapter avec ton système)
+    auth.onAuthStateChanged(user => {
+      if (user) {
+        userId = user.uid;
+        listenBoard(userId);
+        addCardBtn.disabled = false;
+      } else {
+        userId = null;
+        if (unsubscribe) unsubscribe();
+        kanbanDiv.innerHTML = '<p>Connecte-toi pour voir le kanban</p>';
+        addCardBtn.disabled = true;
+      }
     });
-  };
 
-  // Gestion état auth
-  auth.onAuthStateChanged(user => {
-    if (user) {
-      loginForm.style.display = 'none';
-      kanbanDiv.style.display = 'block';
-      listenKanban();
-    } else {
-      loginForm.style.display = 'block';
-      kanbanDiv.style.display = 'none';
-      if(unsubscribeKanban) unsubscribeKanban();
-    }
-  });
-</script>
+    // Exemple de login automatique (à adapter !)
+    auth.signInWithEmailAndPassword('ton@mail.com', 'tonpassword')
+      .catch(err => console.error('Erreur login :', err));
+  </script>
 
 </body>
 </html>
