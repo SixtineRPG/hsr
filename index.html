@@ -1,84 +1,59 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8">
-  <title>Kanban Firebase Simple</title>
+  <meta charset="UTF-8" />
+  <title>Kanban avec Realtime Database</title>
   <style>
     body { font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 1em;}
-    #loginForm, #kanban { margin-top: 2em; }
-    #tasks { list-style: none; padding: 0; }
-    #tasks li { padding: 0.5em; border: 1px solid #ccc; margin-bottom: 0.5em; display: flex; justify-content: space-between; }
-    input[type="text"] { flex-grow: 1; margin-right: 1em; }
-    button { cursor: pointer; }
-    #addTaskInput { width: 70%; }
     .column { margin-bottom: 2em; }
     .cards { list-style: none; padding-left: 0; }
     .cards li { padding: 0.5em; border: 1px solid #ccc; margin-bottom: 0.5em; display: flex; justify-content: space-between; }
     .cards li[contenteditable="true"]:focus { outline: 2px solid #007bff; }
+    button { cursor: pointer; }
   </style>
 </head>
 <body>
 
-  <h1>Kanban Firebase Simple</h1>
+  <h1>Kanban Realtime Database</h1>
 
-  <div id="loginForm">
-    <h2>Connexion</h2>
-    <input id="email" type="email" placeholder="Email" /><br><br>
-    <input id="password" type="password" placeholder="Mot de passe" /><br><br>
-    <button id="loginBtn">Se connecter</button>
-    <p id="loginError" style="color:red;"></p>
-  </div>
+  <div id="columnsContainer"></div>
 
-  <div id="kanban" style="display:none;">
-    <button id="logoutBtn">Déconnexion</button>
-    <div id="columnsContainer"></div>
-    <h3>Ajouter une carte dans "À faire"</h3>
-    <input type="text" id="newCardText" placeholder="Texte de la tâche" />
-    <button id="addCardBtn">Ajouter</button>
-  </div>
+  <h3>Ajouter une carte dans "À faire"</h3>
+  <input type="text" id="newCardText" placeholder="Texte de la tâche" />
+  <button id="addCardBtn">Ajouter</button>
 
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
 
   <script>
-    // Ta config Firebase ici
+    // Ta config Firebase ici (copie la tienne)
     const firebaseConfig = {
-  apiKey: "AIzaSyDjMvnPebLgJGUlgJm6_jU19FOfRYYwoK8",
-  authDomain: "hsr-tracker-26c18.firebaseapp.com",
-  databaseURL: "https://hsr-tracker-26c18-default-rtdb.europe-west1.firebasedatabase.app",
-  projectId: "hsr-tracker-26c18",
-  storageBucket: "hsr-tracker-26c18.firebasestorage.app",
-  messagingSenderId: "202249444604",
-  appId: "1:202249444604:web:4cb7cb6ccb218f27c74b79"
+      apiKey: "AIzaSyDjMvnPebLgJGUlgJm6_jU19FOfRYYwoK8",
+      authDomain: "hsr-tracker-26c18.firebaseapp.com",
+      databaseURL: "https://hsr-tracker-26c18-default-rtdb.europe-west1.firebasedatabase.app",
+      projectId: "hsr-tracker-26c18",
+      storageBucket: "hsr-tracker-26c18.appspot.com",
+      messagingSenderId: "202249444604",
+      appId: "1:202249444604:web:4cb7cb6ccb218f27c74b79"
     };
 
     firebase.initializeApp(firebaseConfig);
-    const auth = firebase.auth();
-    const db = firebase.firestore();
+    const db = firebase.database();
 
-    const loginForm = document.getElementById('loginForm');
-    const loginBtn = document.getElementById('loginBtn');
-    const loginError = document.getElementById('loginError');
-    const kanbanDiv = document.getElementById('kanban');
-    const logoutBtn = document.getElementById('logoutBtn');
     const columnsContainer = document.getElementById('columnsContainer');
     const addCardBtn = document.getElementById('addCardBtn');
     const newCardText = document.getElementById('newCardText');
 
-    let userId = null;
-    let unsubscribe = null;
     let board = null;
 
     function generateId() {
       return Date.now().toString(36) + Math.random().toString(36).substr(2,5);
     }
 
-    // Rendre les colonnes + cartes dynamiquement
-    function renderBoard(board) {
+    function renderBoard(boardData) {
       columnsContainer.innerHTML = '';
-      for (const [colKey, colData] of Object.entries(board.columns)) {
+      for (const [colKey, colData] of Object.entries(boardData.columns)) {
         const colDiv = document.createElement('div');
         colDiv.className = 'column';
 
@@ -93,12 +68,11 @@
           const li = document.createElement('li');
           li.textContent = card.text;
           li.contentEditable = true;
-          li.dataset.colKey = colKey;
-          li.dataset.cardId = cardId;
 
           li.addEventListener('blur', () => {
             const newText = li.textContent.trim();
-            if(newText === '') {
+            if (newText === '') {
+              // Supprimer la carte
               delete board.columns[colKey].cards[cardId];
             } else {
               board.columns[colKey].cards[cardId].text = newText;
@@ -124,54 +98,25 @@
     }
 
     function saveBoard() {
-      if (!userId) return;
-      db.collection('kanbans').doc(userId).set({ board })
-        .catch(e => console.error("Erreur sauvegarde :", e));
+      if (!board) return;
+      db.ref('board').set(board).catch(e => console.error("Erreur sauvegarde :", e));
     }
 
-    function listenBoard(uid) {
-      if(unsubscribe) unsubscribe();
-      unsubscribe = db.collection('kanbans').doc(uid)
-        .onSnapshot(doc => {
-          if (doc.exists) {
-            board = doc.data().board;
-            renderBoard(board);
-          } else {
-            board = {
-              columns: {
-                todo: { title: "À faire", cards: {} },
-                inprogress: { title: "En cours", cards: {} },
-                done: { title: "Fait", cards: {} }
-              }
-            };
-            saveBoard();
-          }
-        });
-    }
-
-    loginBtn.onclick = () => {
-      const email = document.getElementById('email').value.trim();
-      const password = document.getElementById('password').value;
-      loginError.textContent = '';
-      auth.signInWithEmailAndPassword(email, password)
-        .catch(e => loginError.textContent = e.message);
-    };
-
-    logoutBtn.onclick = () => {
-      auth.signOut();
-    };
-
-    auth.onAuthStateChanged(user => {
-      if(user) {
-        userId = user.uid;
-        loginForm.style.display = 'none';
-        kanbanDiv.style.display = 'block';
-        listenBoard(userId);
+    // Ecoute les changements dans Realtime Database sur 'board'
+    db.ref('board').on('value', (snapshot) => {
+      if(snapshot.exists()) {
+        board = snapshot.val();
+        renderBoard(board);
       } else {
-        userId = null;
-        if(unsubscribe) unsubscribe();
-        loginForm.style.display = 'block';
-        kanbanDiv.style.display = 'none';
+        // Initialiser si pas de board
+        board = {
+          columns: {
+            todo: { title: "À faire", cards: {} },
+            inprogress: { title: "En cours", cards: {} },
+            done: { title: "Fait", cards: {} }
+          }
+        };
+        saveBoard();
       }
     });
 
@@ -183,7 +128,6 @@
       saveBoard();
       newCardText.value = '';
     };
-
   </script>
 
 </body>
